@@ -14,11 +14,33 @@ import dashboardRoutes from './routes/dashboard.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
+// Configuración CORS más flexible para Vercel
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'http://localhost:3000',
+    'https://inventario-pls.vercel.app',
+].filter(Boolean);
+
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: function (origin, callback) {
+        // Permitir requests sin origin (como curl o mobile apps)
+        if (!origin) return callback(null, true);
+
+        // Permitir cualquier subdominio de vercel.app
+        if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+
+        callback(new Error('No permitido por CORS'));
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+// Manejar preflight requests
+app.options('*', cors());
+
 app.use(express.json());
 
 // Logging middleware
