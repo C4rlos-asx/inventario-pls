@@ -5,18 +5,34 @@ let pool = null;
 
 export function getPool() {
   if (!pool) {
+    const connectionString = process.env.DATABASE_URL;
+
+    // Detectar si la URL requiere SSL (Render, Neon, etc.)
+    const useSSL = connectionString && (
+      connectionString.includes('render.com') ||
+      connectionString.includes('neon.tech') ||
+      connectionString.includes('sslmode=require') ||
+      process.env.NODE_ENV === 'production'
+    );
+
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-      max: 10,
+      connectionString,
+      ssl: useSSL ? { rejectUnauthorized: false } : false,
+      max: 5, // Reducido para evitar límites de conexión
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: 10000, // Aumentado para conexiones lentas
     });
 
     // Manejo de errores en el pool
     pool.on('error', (err) => {
       console.error('Error inesperado en el pool de PostgreSQL', err);
+      pool = null; // Reiniciar pool en caso de error
     });
+
+    // Test de conexión
+    pool.query('SELECT NOW()')
+      .then(() => console.log('✅ Conexión a PostgreSQL establecida'))
+      .catch((err) => console.error('❌ Error conectando a PostgreSQL:', err.message));
   }
   return pool;
 }
