@@ -58,7 +58,7 @@ router.post('/login', async (req, res) => {
         }
 
         const result = await query(
-            'SELECT id, name, email, password_hash, role FROM users WHERE email = $1 AND is_active = true',
+            'SELECT id, name, email, password_hash, role FROM users WHERE email = $1',
             [email.toLowerCase()]
         );
 
@@ -90,7 +90,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', authMiddleware, async (req, res) => {
     try {
         const result = await query(
-            'SELECT id, name, email, role FROM users WHERE id = $1 AND is_active = true',
+            'SELECT id, name, email, role FROM users WHERE id = $1',
             [req.user.userId]
         );
 

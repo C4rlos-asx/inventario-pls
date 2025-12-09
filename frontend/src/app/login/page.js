@@ -9,6 +9,7 @@ export default function LoginPage() {
     const [isLogin, setIsLogin] = useState(true);
     const [formData, setFormData] = useState({ email: '', password: '', name: '' });
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
 
@@ -113,12 +114,11 @@ export default function LoginPage() {
 
             // Mostrar mensaje de éxito
             setError('');
-            const successMessage = isLogin ? '¡Bienvenido!' : '¡Te has registrado correctamente!';
-            alert(successMessage);
+            setSuccess(isLogin ? '¡Bienvenido! Redirigiendo...' : '¡Te has registrado correctamente! Redirigiendo...');
 
             setTimeout(() => {
                 router.push('/dashboard');
-            }, 100);
+            }, 1500);
         } catch (err) {
             setError(err.message);
             // Animación de error
@@ -205,6 +205,24 @@ export default function LoginPage() {
                     {error && (
                         <div className="form-error" style={{ marginBottom: '1rem' }}>
                             <span>⚠️</span> {error}
+                        </div>
+                    )}
+
+                    {success && (
+                        <div style={{
+                            padding: '1rem',
+                            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(52, 211, 153, 0.1))',
+                            border: '1px solid rgba(16, 185, 129, 0.4)',
+                            borderRadius: 'var(--radius-md)',
+                            color: '#10b981',
+                            fontSize: '0.9rem',
+                            marginBottom: '1rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            animation: 'fadeIn 0.3s ease-out'
+                        }}>
+                            <span style={{ fontSize: '1.2rem' }}>✅</span> {success}
                         </div>
                     )}
 
