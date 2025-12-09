@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sistema de Inventario con Facturación
 
-## Getting Started
+Sistema completo de gestión de inventario con facturación, desarrollado con arquitectura separada de frontend y backend.
 
-First, run the development server:
+## Estructura
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+inventory-system/
+├── backend/          # API REST con Express.js
+│   ├── src/
+│   │   ├── routes/   # Rutas de la API
+│   │   ├── lib/      # Utilidades (db, auth)
+│   │   └── index.js  # Servidor principal
+│   └── package.json
+│
+├── frontend/         # UI con Next.js
+│   ├── src/
+│   │   ├── app/      # Páginas
+│   │   └── lib/      # API service
+│   └── package.json
+│
+└── schema.sql        # Esquema de base de datos
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Despliegue
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+### 1. Base de Datos (Render PostgreSQL)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Crear una base de datos PostgreSQL en Render
+2. Ejecutar el contenido de `schema.sql` en la consola SQL
 
-## Learn More
+### 2. Backend (Render Web Service)
 
-To learn more about Next.js, take a look at the following resources:
+1. Crear un **Web Service** en Render
+2. Configurar:
+   - **Root Directory**: `backend`
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+3. Añadir variables de entorno:
+   - `DATABASE_URL`: URL de PostgreSQL
+   - `JWT_SECRET`: Secreto para tokens
+   - `FRONTEND_URL`: URL del frontend en Vercel
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 3. Frontend (Vercel)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Crear proyecto en Vercel
+2. Configurar:
+   - **Root Directory**: `frontend`
+3. Añadir variable de entorno:
+   - `NEXT_PUBLIC_API_URL`: URL del backend en Render
 
-## Deploy on Vercel
+## Desarrollo Local
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Backend
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+cd backend
+npm install
+# Crear .env con DATABASE_URL, JWT_SECRET, FRONTEND_URL=http://localhost:3000
+npm run dev
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+# Crear .env.local con NEXT_PUBLIC_API_URL=http://localhost:3001
+npm run dev
+```
+
+## Credenciales de Prueba
+
+- Email: `admin@sistema.com`
+- Password: `admin123`
+
+## Funcionalidades
+
+- ✅ Autenticación JWT
+- ✅ CRUD de productos
+- ✅ Gestión de inventario
+- ✅ Creación de facturas
+- ✅ Gestión de clientes
+- ✅ Dashboard con estadísticas
+- ✅ Animaciones con anime.js
+- ✅ Diseño moderno con glassmorphism
