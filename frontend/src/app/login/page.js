@@ -111,9 +111,14 @@ export default function LoginPage() {
                 easing: 'easeOutCubic',
             });
 
+            // Mostrar mensaje de éxito
+            setError('');
+            const successMessage = isLogin ? '¡Bienvenido!' : '¡Te has registrado correctamente!';
+            alert(successMessage);
+
             setTimeout(() => {
                 router.push('/dashboard');
-            }, 400);
+            }, 100);
         } catch (err) {
             setError(err.message);
             // Animación de error

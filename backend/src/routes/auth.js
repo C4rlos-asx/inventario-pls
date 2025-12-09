@@ -95,13 +95,13 @@ router.get('/me', authMiddleware, async (req, res) => {
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Usuario no encontrado' });
+            return res.status(404).json({ authenticated: false, error: 'Usuario no encontrado' });
         }
 
-        res.json({ user: result.rows[0] });
+        res.json({ authenticated: true, user: result.rows[0] });
     } catch (error) {
         console.error('Error en /me:', error);
-        res.status(500).json({ error: 'Error interno del servidor' });
+        res.status(500).json({ authenticated: false, error: 'Error interno del servidor' });
     }
 });
 
