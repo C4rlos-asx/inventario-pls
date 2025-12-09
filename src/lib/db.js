@@ -1,93 +1,88 @@
-import { Pool } from 'pg';
+import { Pool, neonConfig } from 'pg';
 
-// Singleton para la conexión a la base de datos
+// Configuración optimizada para serverless (Vercel)
+// Las funciones serverless cierran conexiones rápidamente
+
 let pool = null;
+
+function createPool() {
+  const connectionString = process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    throw new Error('DATABASE_URL no está configurada');
+  }
+
+  // Log del host (sin credenciales)
+  try {
+    const url = new URL(connectionString);
+    console.log('🔌 Conectando a PostgreSQL en:', url.hostname);
+  } catch (e) {
+    console.log('🔌 Conectando a PostgreSQL...');
+  }
+
+  return new Pool({
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false,
+    },
+    // Configuración optimizada para serverless
+    max: 1, // Solo 1 conexión por invocación
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 10000,
+  });
+}
 
 export function getPool() {
   if (!pool) {
-    const connectionString = process.env.DATABASE_URL;
-
-    if (!connectionString) {
-      console.error('❌ DATABASE_URL no está configurada');
-      throw new Error('DATABASE_URL no está configurada');
-    }
-
-    // Mostrar a qué host nos conectamos (sin credenciales)
-    try {
-      const url = new URL(connectionString);
-      console.log('🔌 Conectando a PostgreSQL en:', url.hostname);
-    } catch (e) {
-      console.log('🔌 Conectando a PostgreSQL...');
-    }
-
-    pool = new Pool({
-      connectionString,
-      // SIEMPRE usar SSL - requerido por Render, Neon, Railway, etc.
-      ssl: {
-        rejectUnauthorized: false,
-      },
-      max: 3, // Reducido para plan gratuito
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 30000, // 30 segundos
-      keepAlive: true,
-      keepAliveInitialDelayMillis: 10000,
-    });
-
-    // Manejo de errores en el pool
-    pool.on('error', (err) => {
-      console.error('❌ Error en el pool de PostgreSQL:', err.message);
-      pool = null;
-    });
-
-    pool.on('connect', () => {
-      console.log('✅ Conexión a PostgreSQL establecida');
-    });
+    pool = createPool();
   }
   return pool;
 }
 
-// Ejecutar una query simple
+// Ejecutar una query simple - crea nueva conexión cada vez en serverless
 export async function query(text, params) {
-  const currentPool = getPool();
   const start = Date.now();
+
+  // Crear pool fresco para cada query en serverless
+  const currentPool = createPool();
+
   try {
     const result = await currentPool.query(text, params);
     const duration = Date.now() - start;
-    console.log('Query ejecutada', { text: text.substring(0, 50), duration, rows: result.rowCount });
+    console.log('Query ejecutada', {
+      text: text.substring(0, 50),
+      duration,
+      rows: result.rowCount
+    });
     return result;
   } catch (error) {
     console.error('Error en query:', error.message);
-    // Reiniciar pool en caso de error de conexión
-    if (error.message.includes('terminated') || error.message.includes('ECONNREFUSED')) {
-      pool = null;
-    }
     throw error;
+  } finally {
+    // Cerrar el pool después de cada operación en serverless
+    try {
+      await currentPool.end();
+    } catch (e) {
+      // Ignorar errores al cerrar
+    }
   }
 }
 
 // Obtener un cliente para transacciones
 export async function getClient() {
-  const currentPool = getPool();
+  const currentPool = createPool();
   const client = await currentPool.connect();
-  const originalQuery = client.query;
-  const originalRelease = client.release;
 
-  // Timeout para liberar cliente automáticamente
-  const timeout = setTimeout(() => {
-    console.error('Cliente de BD no liberado a tiempo!');
-  }, 30000);
+  const originalRelease = client.release.bind(client);
 
-  // Sobrescribir query para tracking
-  client.query = (...args) => {
-    client.lastQuery = args;
-    return originalQuery.apply(client, args);
-  };
-
-  client.release = () => {
-    clearTimeout(timeout);
-    client.query = originalQuery;
-    client.release = originalRelease;
-    return originalRelease.apply(client);
+  // Sobrescribir release para también cerrar el pool
+  client.release = async () => {
+    originalRelease();
+    try {
+      await currentPool.end();
+    } catch (e) {
+      // Ignorar errores al cerrar
+    }
   };
 
   return client;
@@ -95,7 +90,9 @@ export async function getClient() {
 
 // Helper para transacciones
 export async function withTransaction(callback) {
-  const client = await getClient();
+  const currentPool = createPool();
+  const client = await currentPool.connect();
+
   try {
     await client.query('BEGIN');
     const result = await callback(client);
@@ -106,5 +103,10 @@ export async function withTransaction(callback) {
     throw error;
   } finally {
     client.release();
+    try {
+      await currentPool.end();
+    } catch (e) {
+      // Ignorar errores al cerrar
+    }
   }
 }
