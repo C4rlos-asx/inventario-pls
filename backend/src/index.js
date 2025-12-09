@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express from 'express';
-import cors from 'cors';
 
 // Importar rutas
 import authRoutes from './routes/auth.js';
@@ -14,32 +13,20 @@ import dashboardRoutes from './routes/dashboard.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Configuración CORS más flexible para Vercel
-const allowedOrigins = [
-    process.env.FRONTEND_URL,
-    'http://localhost:3000',
-    'https://inventario-pls.vercel.app',
-].filter(Boolean);
+// CORS permisivo para Vercel
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
 
-app.use(cors({
-    origin: function (origin, callback) {
-        // Permitir requests sin origin (como curl o mobile apps)
-        if (!origin) return callback(null, true);
-
-        // Permitir cualquier subdominio de vercel.app
-        if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
-            return callback(null, true);
-        }
-
-        callback(new Error('No permitido por CORS'));
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-
-// Manejar preflight requests
-app.options('*', cors());
+    // Manejar preflight
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+    next();
+});
 
 app.use(express.json());
 
