@@ -1,14 +1,20 @@
-import { Pool } from 'pg';
+import pg from 'pg';
+const { Pool } = pg;
 
+// Configuración para aceptar certificados auto-firmados de Render
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false,
-    },
+    ssl: process.env.DATABASE_URL?.includes('render.com')
+        ? { rejectUnauthorized: false }
+        : false,
 });
 
 pool.on('error', (err) => {
     console.error('Error inesperado en el pool:', err);
+});
+
+pool.on('connect', () => {
+    console.log('✅ Conectado a PostgreSQL');
 });
 
 export async function query(text, params) {
