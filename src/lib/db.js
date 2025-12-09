@@ -1,97 +1,113 @@
-import { neon } from '@neondatabase/serverless';
+import pg from 'pg';
 
-// Cliente SQL optimizado para serverless
-// Funciona con cualquier PostgreSQL, no solo Neon
-let sql = null;
+const { Pool } = pg;
 
-function getSQL() {
-  if (!sql) {
-    const connectionString = process.env.DATABASE_URL;
-
-    if (!connectionString) {
-      throw new Error('DATABASE_URL no está configurada');
-    }
-
-    // Log del host (sin credenciales)
-    try {
-      const url = new URL(connectionString);
-      console.log('🔌 Conectando a PostgreSQL en:', url.hostname);
-    } catch (e) {
-      console.log('🔌 Conectando a PostgreSQL...');
-    }
-
-    // Crear cliente neon-serverless
-    sql = neon(connectionString);
-  }
-  return sql;
-}
-
-// Ejecutar una query simple
+// Crear un nuevo pool para cada invocación serverless
 export async function query(text, params = []) {
+  const connectionString = process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    throw new Error('DATABASE_URL no está configurada');
+  }
+
+  console.log('🔌 Ejecutando query en PostgreSQL...');
+
+  const pool = new Pool({
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false,
+    },
+    max: 1,
+    idleTimeoutMillis: 0,
+    connectionTimeoutMillis: 15000,
+  });
+
   const start = Date.now();
-  const client = getSQL();
 
   try {
-    // El driver neon usa tagged template literals o función directa
-    const result = await client(text, params);
-    const duration = Date.now() - start;
-    console.log('Query ejecutada', {
-      text: text.substring(0, 50),
-      duration,
-      rows: result.length
-    });
+    const client = await pool.connect();
 
-    // Formatear resultado para compatibilidad con pg
-    return {
-      rows: result,
-      rowCount: result.length,
-    };
+    try {
+      const result = await client.query(text, params);
+      const duration = Date.now() - start;
+      console.log('✅ Query ejecutada', {
+        text: text.substring(0, 50),
+        duration,
+        rows: result.rowCount
+      });
+      return result;
+    } finally {
+      client.release();
+    }
   } catch (error) {
-    console.error('Error en query:', error.message);
+    console.error('❌ Error en query:', error.message);
     throw error;
+  } finally {
+    await pool.end();
   }
 }
 
-// Para compatibilidad - getPool ya no se usa pero mantener la interfaz
-export function getPool() {
-  return {
-    query: async (text, params) => query(text, params),
-  };
-}
-
-// Helper para transacciones (simplificado para serverless)
+// Helper para transacciones
 export async function withTransaction(callback) {
-  const client = getSQL();
+  const connectionString = process.env.DATABASE_URL;
+
+  if (!connectionString) {
+    throw new Error('DATABASE_URL no está configurada');
+  }
+
+  const pool = new Pool({
+    connectionString,
+    ssl: {
+      rejectUnauthorized: false,
+    },
+    max: 1,
+    idleTimeoutMillis: 0,
+    connectionTimeoutMillis: 15000,
+  });
+
+  const client = await pool.connect();
 
   try {
-    await client('BEGIN');
+    await client.query('BEGIN');
 
-    // Crear un cliente mock para el callback
     const txClient = {
-      query: async (text, params = []) => {
-        const result = await client(text, params);
-        return { rows: result, rowCount: result.length };
-      },
-      release: () => { }, // No-op en serverless
+      query: async (text, params = []) => client.query(text, params),
+      release: () => { },
     };
 
     const result = await callback(txClient);
-    await client('COMMIT');
+    await client.query('COMMIT');
     return result;
   } catch (error) {
-    await client('ROLLBACK');
+    await client.query('ROLLBACK');
     throw error;
+  } finally {
+    client.release();
+    await pool.end();
   }
 }
 
-// Mantener getClient para compatibilidad
+// Para compatibilidad
+export function getPool() {
+  return { query };
+}
+
 export async function getClient() {
-  const client = getSQL();
+  const connectionString = process.env.DATABASE_URL;
+
+  const pool = new Pool({
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+    max: 1,
+  });
+
+  const client = await pool.connect();
+
   return {
-    query: async (text, params = []) => {
-      const result = await client(text, params);
-      return { rows: result, rowCount: result.length };
+    query: (text, params) => client.query(text, params),
+    release: async () => {
+      client.release();
+      await pool.end();
     },
-    release: () => { }, // No-op
   };
 }
