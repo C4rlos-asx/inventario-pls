@@ -1,112 +1,97 @@
-import { Pool, neonConfig } from 'pg';
+import { neon } from '@neondatabase/serverless';
 
-// Configuración optimizada para serverless (Vercel)
-// Las funciones serverless cierran conexiones rápidamente
+// Cliente SQL optimizado para serverless
+// Funciona con cualquier PostgreSQL, no solo Neon
+let sql = null;
 
-let pool = null;
+function getSQL() {
+  if (!sql) {
+    const connectionString = process.env.DATABASE_URL;
 
-function createPool() {
-  const connectionString = process.env.DATABASE_URL;
+    if (!connectionString) {
+      throw new Error('DATABASE_URL no está configurada');
+    }
 
-  if (!connectionString) {
-    throw new Error('DATABASE_URL no está configurada');
+    // Log del host (sin credenciales)
+    try {
+      const url = new URL(connectionString);
+      console.log('🔌 Conectando a PostgreSQL en:', url.hostname);
+    } catch (e) {
+      console.log('🔌 Conectando a PostgreSQL...');
+    }
+
+    // Crear cliente neon-serverless
+    sql = neon(connectionString);
   }
-
-  // Log del host (sin credenciales)
-  try {
-    const url = new URL(connectionString);
-    console.log('🔌 Conectando a PostgreSQL en:', url.hostname);
-  } catch (e) {
-    console.log('🔌 Conectando a PostgreSQL...');
-  }
-
-  return new Pool({
-    connectionString,
-    ssl: {
-      rejectUnauthorized: false,
-    },
-    // Configuración optimizada para serverless
-    max: 1, // Solo 1 conexión por invocación
-    idleTimeoutMillis: 10000,
-    connectionTimeoutMillis: 10000,
-  });
+  return sql;
 }
 
-export function getPool() {
-  if (!pool) {
-    pool = createPool();
-  }
-  return pool;
-}
-
-// Ejecutar una query simple - crea nueva conexión cada vez en serverless
-export async function query(text, params) {
+// Ejecutar una query simple
+export async function query(text, params = []) {
   const start = Date.now();
-
-  // Crear pool fresco para cada query en serverless
-  const currentPool = createPool();
+  const client = getSQL();
 
   try {
-    const result = await currentPool.query(text, params);
+    // El driver neon usa tagged template literals o función directa
+    const result = await client(text, params);
     const duration = Date.now() - start;
     console.log('Query ejecutada', {
       text: text.substring(0, 50),
       duration,
-      rows: result.rowCount
+      rows: result.length
     });
-    return result;
+
+    // Formatear resultado para compatibilidad con pg
+    return {
+      rows: result,
+      rowCount: result.length,
+    };
   } catch (error) {
     console.error('Error en query:', error.message);
     throw error;
-  } finally {
-    // Cerrar el pool después de cada operación en serverless
-    try {
-      await currentPool.end();
-    } catch (e) {
-      // Ignorar errores al cerrar
-    }
   }
 }
 
-// Obtener un cliente para transacciones
-export async function getClient() {
-  const currentPool = createPool();
-  const client = await currentPool.connect();
-
-  const originalRelease = client.release.bind(client);
-
-  // Sobrescribir release para también cerrar el pool
-  client.release = async () => {
-    originalRelease();
-    try {
-      await currentPool.end();
-    } catch (e) {
-      // Ignorar errores al cerrar
-    }
+// Para compatibilidad - getPool ya no se usa pero mantener la interfaz
+export function getPool() {
+  return {
+    query: async (text, params) => query(text, params),
   };
-
-  return client;
 }
 
-// Helper para transacciones
+// Helper para transacciones (simplificado para serverless)
 export async function withTransaction(callback) {
-  const currentPool = createPool();
-  const client = await currentPool.connect();
+  const client = getSQL();
 
   try {
-    await client.query('BEGIN');
-    const result = await callback(client);
-    await client.query('COMMIT');
+    await client('BEGIN');
+
+    // Crear un cliente mock para el callback
+    const txClient = {
+      query: async (text, params = []) => {
+        const result = await client(text, params);
+        return { rows: result, rowCount: result.length };
+      },
+      release: () => { }, // No-op en serverless
+    };
+
+    const result = await callback(txClient);
+    await client('COMMIT');
     return result;
   } catch (error) {
-    await client.query('ROLLBACK');
+    await client('ROLLBACK');
     throw error;
-  } finally {
-    client.release();
-    try {
-      await currentPool.end();
-    } catch (e) {
-      // Ignorar errores al cerrar
-    }
   }
+}
+
+// Mantener getClient para compatibilidad
+export async function getClient() {
+  const client = getSQL();
+  return {
+    query: async (text, params = []) => {
+      const result = await client(text, params);
+      return { rows: result, rowCount: result.length };
+    },
+    release: () => { }, // No-op
+  };
 }
