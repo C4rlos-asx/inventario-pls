@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import anime from 'animejs';
-import api from '@/lib/api';
 
 export default function LoginPage() {
     const [isLogin, setIsLogin] = useState(true);
@@ -17,14 +16,6 @@ export default function LoginPage() {
     const particlesRef = useRef(null);
 
     useEffect(() => {
-        // Verificar si ya está autenticado
-        const token = api.getToken();
-        if (token) {
-            api.getMe()
-                .then(() => router.push('/dashboard'))
-                .catch(() => api.removeToken());
-        }
-
         // Animación de entrada
         anime({
             targets: cardRef.current,
@@ -92,10 +83,17 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            if (isLogin) {
-                await api.login(formData.email, formData.password);
-            } else {
-                await api.register(formData.name, formData.email, formData.password);
+            const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Error en la autenticación');
             }
 
             // Animación de éxito

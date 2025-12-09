@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import anime from 'animejs';
-import api from '@/lib/api';
 
 export default function DashboardPage() {
     const [stats, setStats] = useState(null);
@@ -62,7 +61,8 @@ export default function DashboardPage() {
 
     const fetchDashboardData = async () => {
         try {
-            const data = await api.getDashboard();
+            const res = await fetch('/api/dashboard');
+            const data = await res.json();
             setStats(data);
         } catch (error) {
             console.error('Error fetching dashboard:', error);

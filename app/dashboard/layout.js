@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import anime from 'animejs';
-import api from '@/lib/api';
 
 const navItems = [
     { href: '/dashboard', icon: '📊', label: 'Dashboard' },
@@ -24,19 +23,14 @@ export default function DashboardLayout({ children }) {
 
     useEffect(() => {
         // Verificar autenticación
-        const token = api.getToken();
-        if (!token) {
-            router.push('/login');
-            return;
-        }
-
-        api.getMe()
+        fetch('/api/auth/me')
+            .then(res => res.json())
             .then(data => {
-                setUser(data.user);
-            })
-            .catch(() => {
-                api.removeToken();
-                router.push('/login');
+                if (!data.authenticated) {
+                    router.push('/login');
+                } else {
+                    setUser(data.user);
+                }
             });
     }, [router]);
 
@@ -54,7 +48,7 @@ export default function DashboardLayout({ children }) {
     }, [pathname]);
 
     const handleLogout = async () => {
-        await api.logout();
+        await fetch('/api/auth/logout', { method: 'POST' });
         router.push('/login');
     };
 
